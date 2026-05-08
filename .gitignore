@@ -1,0 +1,23 @@
+# Unity 核心目录
+/Library/
+/Temp/
+/Logs/
+/Obj/
+/Build/
+/Builds/
+/UserSettings/
+
+# 编辑器配置文件
+/.vs/
+*.csproj
+*.unityproj
+*.sln
+*.suo
+*.user
+*.userprefs
+*.pidb
+*.vsconfig
+
+# 系统文件
+.DS_Store
+Thumbs.db
