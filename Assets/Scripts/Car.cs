@@ -1,291 +1,216 @@
 using UnityEngine;
+using System.Collections;
 
 public class Car : MonoBehaviour
 {
-    [Header("Components")]
+    // variables visible in the inspector
     public Rigidbody rb;
-    public WheelCollider[] wheelColliders; // FL, FR, RL, RR
-    public Transform[] wheelMeshes;     // FL, FR, RL, RR
 
-    [Header("Steering Settings")]
-    public int rotateSpeed = 2;
-    public int rotationAngle = 45;
-    public int wheelRotateSpeed = 10;
+    public Transform[] wheelMeshes;
+    public WheelCollider[] wheelColliders;
 
-    [Header("Effects")]
-    public ParticleSystem grassEffects;
+    public int rotateSpeed;
+    public int rotationAngle;
+    public int wheelRotateSpeed;
 
-    [Header("Downforce")]
-    public float extraDownforce = 500f;
+    public Transform[] grassEffects;
+    public Transform[] skidMarkPivots;
+    public float grassEffectOffset;
 
-    [Header("Ragdoll")]
-    public GameObject ragdollPrefab;
+    public Transform back;
+    public float constantBackForce;
 
-    private float currentAngle = 0f;
-    private float targetAngleOffset = 0f;
-    private float cylinderRadius = 5f;
-    private bool hasLanded = false;
+    public GameObject skidMark;
+    public float skidMarkSize;
+    public float skidMarkDelay;
+    public float minRotationDifference;
+
+    public GameObject ragdoll;
+
+    // not in the inspector
+    int targetRotation;
+    WorldGenerator generator;
+
+    float lastRotation;
+    bool skidMarkRoutine;
 
     void Start()
     {
-        if (rb == null)
-            rb = GetComponent<Rigidbody>();
-
-        WorldGenerator wg = FindObjectOfType<WorldGenerator>();
-        if (wg != null)
-            cylinderRadius = wg.scale;
-
-        Vector3 pos = transform.position;
-        currentAngle = Mathf.Atan2(pos.y, pos.x);
-
-        rb.useGravity = false; // 禁用世界重力，使用圆柱体自定义重力
-        rb.sleepThreshold = 0f; // 禁用休眠，确保 WheelCollider 持续检测地面
-        hasLanded = false;
-    }
-
-    void Update()
-    {
-        HandleInput();
-        UpdateWheelMeshes();
-        HandleEffects();
+        // find the world generator and start the skid mark coroutine
+        generator = GameObject.FindObjectOfType<WorldGenerator>();
+        StartCoroutine(SkidMark());
     }
 
     void FixedUpdate()
     {
-        if (!hasLanded)
-        {
-            ApplyFallingPhysics();
-            AlignCarToSurface();
-        }
-        else
-        {
-            ApplyCylinderForces();
-            UpdateCylinderAngularSteering();
-        }
-        PreventTunneling();
+        // update the skidmark and the grass effects
+        UpdateEffects();
     }
 
-    /// <summary>
-    /// 下落阶段：将小车从外部拉向圆柱体表面，模拟重力下落效果
-    /// </summary>
-    void ApplyFallingPhysics()
+    void LateUpdate()
     {
-        Vector3 car2D = new Vector3(rb.position.x, rb.position.y, 0f);
-        float distFromAxis = car2D.magnitude;
-
-        if (distFromAxis < 0.01f)
+        // for all wheels
+        for (int i = 0; i < wheelMeshes.Length; i++)
         {
-            // 异常情况：小车在轴心，推到表面
-            rb.position = new Vector3(cylinderRadius, 0f, rb.position.z);
-            return;
-        }
-
-        Vector3 inward = -car2D.normalized; // 指向圆柱体轴心（即"下方"）
-
-        // 强引力将小车拉到圆柱体表面
-        float fallForce = Physics.gravity.magnitude * 6f;
-        rb.AddForce(inward * fallForce, ForceMode.Acceleration);
-
-        // 阻尼：抵消向内的速度分量，防止弹跳/振荡
-        float radialVel = Vector3.Dot(rb.velocity, inward);
-        if (radialVel > 0f)
-        {
-            rb.AddForce(-inward * radialVel * 3f, ForceMode.Acceleration);
-        }
-
-        // 检测是否着陆：距离接近表面 且 任意车轮接地
-        bool anyWheelGrounded = false;
-        if (wheelColliders != null && wheelColliders.Length > 0)
-        {
-            foreach (var wc in wheelColliders)
-            {
-                if (wc == null) continue;
-                WheelHit hit;
-                if (wc.GetGroundHit(out hit))
-                {
-                    anyWheelGrounded = true;
-                    break;
-                }
-            }
-        }
-
-        if (distFromAxis <= cylinderRadius + 0.15f && anyWheelGrounded)
-        {
-            hasLanded = true;
-        }
-    }
-
-    /// <summary>
-    /// 下落过程中将车身姿态对齐到圆柱体表面（车顶朝外）
-    /// </summary>
-    void AlignCarToSurface()
-    {
-        Vector3 car2D = new Vector3(rb.position.x, rb.position.y, 0f);
-        if (car2D.magnitude < 0.01f) return;
-
-        Vector3 outward = car2D.normalized;
-        // up 指向外（远离轴心），forward 沿 Z 轴
-        Quaternion targetRotation = Quaternion.LookRotation(Vector3.forward, outward);
-        rb.MoveRotation(Quaternion.Slerp(rb.rotation, targetRotation, 10f * Time.fixedDeltaTime));
-    }
-
-    /// <summary>
-    /// 防穿模：硬性限制小车与圆柱体轴心的最小距离，防止穿透赛道网格
-    /// </summary>
-    void PreventTunneling()
-    {
-        Vector3 car2D = new Vector3(rb.position.x, rb.position.y, 0f);
-        float distFromAxis = car2D.magnitude;
-
-        float wheelRadius = 0.35f;
-        float minDist = cylinderRadius - wheelRadius - 0.3f;
-
-        if (minDist < 0.5f) minDist = 0.5f;
-
-        if (distFromAxis < minDist && distFromAxis > 0.001f)
-        {
-            Vector3 outward = car2D.normalized;
-            Vector3 clampedPos = outward * minDist;
-            rb.position = new Vector3(clampedPos.x, clampedPos.y, rb.position.z);
-
-            // 消除指向内侧的速度分量，避免持续冲撞
-            float radialVel = Vector3.Dot(rb.velocity, outward);
-            if (radialVel < 0f)
-            {
-                Vector3 tangentialVel = rb.velocity - outward * radialVel;
-                rb.velocity = tangentialVel;
-            }
-        }
-    }
-
-    void HandleInput()
-    {
-        float steerInput = 0f;
-
-        // Mouse position — left/right third of screen
-        if (Input.mousePosition.x < Screen.width * 0.3f)
-            steerInput = -1f;
-        else if (Input.mousePosition.x > Screen.width * 0.7f)
-            steerInput = 1f;
-
-        // Arrow keys
-        steerInput += Input.GetAxis("Horizontal");
-        steerInput = Mathf.Clamp(steerInput, -1f, 1f);
-
-        targetAngleOffset = steerInput * rotationAngle;
-    }
-
-    void UpdateCylinderAngularSteering()
-    {
-        // 仅处理角度旋转，不再覆盖位置
-        float offsetRad = targetAngleOffset * Mathf.Deg2Rad;
-        float targetAngle = currentAngle + offsetRad;
-
-        float maxDelta = rotateSpeed * Time.fixedDeltaTime;
-        currentAngle = Mathf.Lerp(currentAngle, targetAngle, maxDelta);
-
-        // 计算朝向：forward +Z，up 指向圆柱体轴心
-        Vector3 up = new Vector3(-Mathf.Cos(currentAngle), -Mathf.Sin(currentAngle), 0f);
-        Quaternion targetRotation = Quaternion.LookRotation(Vector3.forward, up);
-
-        float rotSpeed = rotateSpeed * 50f * Time.fixedDeltaTime;
-        rb.MoveRotation(Quaternion.RotateTowards(rb.rotation, targetRotation, rotSpeed));
-
-        // 用力将车辆保持在圆柱体表面附近，替代 MovePosition
-        Vector3 car2D = new Vector3(rb.position.x, rb.position.y, 0f);
-        float distFromAxis = car2D.magnitude;
-        Vector3 outward = car2D.normalized;
-
-        float wheelRadius = 0.35f;
-        float targetDist = cylinderRadius - wheelRadius;
-
-        if (distFromAxis > targetDist + 0.1f)
-        {
-            // 离轴太远（脱离表面），用力拉回
-            Vector3 pullIn = -outward * Physics.gravity.magnitude * 20f;
-            rb.AddForce(pullIn, ForceMode.Acceleration);
-        }
-        else if (distFromAxis < targetDist - 0.3f)
-        {
-            // 离轴太近，推向外表面
-            rb.AddForce(outward * Physics.gravity.magnitude * 5f, ForceMode.Acceleration);
-        }
-    }
-
-    void ApplyCylinderForces()
-    {
-        // 自定义重力：将车辆拉向圆柱体内表面（远离轴心方向 = 朝向表面外侧）
-        Vector3 car2D = new Vector3(rb.position.x, rb.position.y, 0f);
-        Vector3 outward = car2D.normalized;
-
-        float distFromAxis = car2D.magnitude;
-
-        // 距离相关的重力强度：越靠近轴心，推力越强（模拟向"下"滚落）
-        float forceScale = 1.5f;
-        if (distFromAxis < cylinderRadius - 3f)
-            forceScale = 12f;
-        else if (distFromAxis < cylinderRadius - 1.5f)
-            forceScale = 8f;
-        else if (distFromAxis < cylinderRadius - 0.5f)
-            forceScale = 4f;
-        else if (distFromAxis < cylinderRadius)
-            forceScale = 2f;
-
-        rb.AddForce(outward * Physics.gravity.magnitude * forceScale, ForceMode.Acceleration);
-    }
-
-    void UpdateWheelMeshes()
-    {
-        for (int i = 0; i < wheelColliders.Length && i < wheelMeshes.Length; i++)
-        {
-            if (wheelColliders[i] == null || wheelMeshes[i] == null) continue;
-
+            // set the wheel mesh to the position of the wheel collider
+            Quaternion quat;
             Vector3 pos;
-            Quaternion rot;
-            wheelColliders[i].GetWorldPose(out pos, out rot);
+
+            wheelColliders[i].GetWorldPose(out pos, out quat);
 
             wheelMeshes[i].position = pos;
-            wheelMeshes[i].rotation = rot * Quaternion.Euler(wheelRotateSpeed * Time.time * 100f, 0f, 0f);
+
+            // rotate the wheel so it looks like we're driving
+            wheelMeshes[i].Rotate(Vector3.right * Time.deltaTime * wheelRotateSpeed);
         }
+
+        // if the player wants to turn, rotate the car
+        if (Input.GetMouseButton(0) || Input.GetAxis("Horizontal") != 0)
+        {
+            UpdateTargetRotation();
+        }
+        else if (targetRotation != 0)
+        {
+            // else, rotate back to the center
+            targetRotation = 0;
+        }
+
+        // apply the rotation by rotating towards the target angle on the y axis
+        Vector3 rotation = new Vector3(transform.localEulerAngles.x, targetRotation, transform.localEulerAngles.z);
+        transform.rotation = Quaternion.RotateTowards(transform.rotation, Quaternion.Euler(rotation), rotateSpeed * Time.deltaTime);
     }
 
-    void HandleEffects()
+    void UpdateTargetRotation()
     {
-        if (grassEffects == null) return;
-
-        bool rearGrounded = true;
-        if (wheelColliders.Length >= 4)
+        // if we're using the mouse to rotate
+        if (Input.GetAxis("Horizontal") == 0)
         {
-            WheelHit hitRL;
-            WheelHit hitRR;
-            bool rl = wheelColliders[2].GetGroundHit(out hitRL);
-            bool rr = wheelColliders[3].GetGroundHit(out hitRR);
-            rearGrounded = rl || rr;
-        }
-
-        if (!rearGrounded)
-        {
-            // Extra downforce at the rear — push toward cylinder surface (outward)
-            Vector3 rearPos = transform.position - transform.forward * 1f;
-            Vector3 car2D = new Vector3(transform.position.x, transform.position.y, 0f);
-            Vector3 outward = car2D.normalized;
-            rb.AddForceAtPosition(outward * extraDownforce, rearPos, ForceMode.Force);
-
-            if (!grassEffects.isPlaying)
-                grassEffects.Play();
+            // get the mouse position (left/right side of the screen)
+            if (Input.mousePosition.x > Screen.width * 0.5f)
+            {
+                // rotate right
+                targetRotation = rotationAngle;
+            }
+            else
+            {
+                // rotate left
+                targetRotation = -rotationAngle;
+            }
         }
         else
         {
-            if (grassEffects.isPlaying)
-                grassEffects.Stop();
+            // if we're pressing arrow keys or a/d, rotate the car based on the horizontal input value
+            targetRotation = (int)(rotationAngle * Input.GetAxis("Horizontal"));
         }
+    }
+
+    void UpdateEffects()
+    {
+        // if both wheels are off the ground, add force will be true
+        bool addForce = true;
+        // check if we rotated the car since last frame
+        bool rotated = Mathf.Abs(lastRotation - transform.localEulerAngles.y) > minRotationDifference;
+
+        // for both grass effects (rear wheels)
+        for (int i = 0; i < 2; i++)
+        {
+            // get the rear wheels (one of them in each iteration)
+            Transform wheelMesh = wheelMeshes[i + 2];
+
+            // check if this wheel is grounded currently
+            if (Physics.Raycast(wheelMesh.position, Vector3.down, grassEffectOffset * 1.5f))
+            {
+                // if so, show the grass effect
+                if (!grassEffects[i].gameObject.activeSelf)
+                    grassEffects[i].gameObject.SetActive(true);
+
+                // update the grass effect height and the skidmark height to match this wheel
+                float effectHeight = wheelMesh.position.y - grassEffectOffset;
+                Vector3 targetPosition = new Vector3(grassEffects[i].position.x, effectHeight, wheelMesh.position.z);
+                grassEffects[i].position = targetPosition;
+                skidMarkPivots[i].position = targetPosition;
+
+                // this wheel is grounded so we don't need any extra force at the back of the car
+                addForce = false;
+            }
+            else if (grassEffects[i].gameObject.activeSelf)
+            {
+                // if we're not grounded, don't show the grass effect
+                grassEffects[i].gameObject.SetActive(false);
+            }
+        }
+
+        // add force at the back of the car for stabilization
+        if (addForce)
+        {
+            rb.AddForceAtPosition(Vector3.down * constantBackForce, back.position);
+            // don't show the skidmarks
+            skidMarkRoutine = false;
+        }
+        else
+        {
+            if (targetRotation != 0)
+            {
+                // if the car has rotated show the skid mark
+                if (rotated && !skidMarkRoutine)
+                {
+                    skidMarkRoutine = true;
+                }
+                else if (!rotated && skidMarkRoutine)
+                {
+                    skidMarkRoutine = false;
+                }
+            }
+            else
+            {
+                // don't show the skidmark if we're rotating back to the center
+                skidMarkRoutine = false;
+            }
+        }
+
+        // update the last rotation (which is now the current rotation since everything has been updated)
+        lastRotation = transform.localEulerAngles.y;
     }
 
     public void FallApart()
     {
-        if (ragdollPrefab != null)
-            Instantiate(ragdollPrefab, transform.position, transform.rotation);
-
+        // destroy the car
+        Instantiate(ragdoll, transform.position, transform.rotation);
         gameObject.SetActive(false);
+    }
+
+    IEnumerator SkidMark()
+    {
+        // loops continuously
+        while (true)
+        {
+            // wait for the delay in between individual skid marks
+            yield return new WaitForSeconds(skidMarkDelay);
+
+            // show skidmarks if we need skidmarks now
+            if (skidMarkRoutine)
+            {
+                // for both rear wheels, instantiate a skid mark and parent it to the environment so it moves realistically
+                for (int i = 0; i < skidMarkPivots.Length; i++)
+                {
+                    GameObject newSkidMark = Instantiate(skidMark, skidMarkPivots[i].position, skidMarkPivots[i].rotation);
+                    if (generator != null)
+                    {
+                        Transform worldPiece = generator.GetWorldPiece();
+                        if (worldPiece != null)
+                            newSkidMark.transform.parent = worldPiece;
+                    }
+                    newSkidMark.transform.localScale = new Vector3(1, 1, 4) * skidMarkSize;
+                }
+            }
+        }
+    }
+
+    void OnCollisionEnter(Collision collision)
+    {
+        if (collision.gameObject.CompareTag("Obstacle"))
+        {
+            FallApart();
+        }
     }
 }

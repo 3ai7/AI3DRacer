@@ -14,19 +14,46 @@ public class WorldGenerator : MonoBehaviour
     public float perlinScale = 0.5f;
 
     [Tooltip("地形起伏最大高度")]
-    public float waveHeight = 0.15f;
+    public float waveHeight = 1f;
 
     [Tooltip("柏林噪声采样偏移")]
     public float offset = 0f;
 
-    [Tooltip("顶点随机偏移量")]
-    public float randomness = 0.03f;
+    [Tooltip("柏林噪声偏移增量（每个新片段叠加）")]
+    public float randomness = 0.1f;
 
     [Tooltip("世界向玩家移动的速度")]
     public float globalSpeed = 10f;
 
-    [Tooltip("起始过渡长度")]
-    public float startTransitionLength = 2f;
+    // 实际圆柱体半径（由其他脚本读取）
+    public float CylinderRadius => dimensions.x * scale * 0.5f;
+
+    /// <summary>
+    /// 返回离玩家最近的世界片段的 Transform，用于刹车痕等特效的父级绑定
+    /// </summary>
+    public Transform GetWorldPiece()
+    {
+        if (segments.Count == 0) return null;
+
+        SegmentData closest = segments[0];
+        float minDist = float.MaxValue;
+
+        foreach (var seg in segments)
+        {
+            if (seg.gameObject == null) continue;
+            float d = Mathf.Abs(seg.gameObject.transform.position.z - player.position.z);
+            if (d < minDist)
+            {
+                minDist = d;
+                closest = seg;
+            }
+        }
+
+        return closest.gameObject != null ? closest.gameObject.transform : null;
+    }
+
+    [Tooltip("起始过渡长度（行数）")]
+    public int startTransitionLength = 2;
 
     [Header("References")]
     public Transform player;
@@ -35,6 +62,7 @@ public class WorldGenerator : MonoBehaviour
     private List<SegmentData> segments = new List<SegmentData>();
     private int segmentIndex = 0;
     private float segmentZLength;
+    private Vector3[] beginPoints;
 
     private class SegmentData
     {
@@ -51,26 +79,31 @@ public class WorldGenerator : MonoBehaviour
             if (p != null) player = p.transform;
         }
 
-        // 每个片段的Z轴长度 = scale * 5，让片段更长
-        segmentZLength = scale * 5f;
+        // 径向顶点数 + 1（首尾焊接）
+        beginPoints = new Vector3[dimensions.x + 1];
 
-        // 创建初始两个片段
-        CreateSegment(Vector3.zero, null);
-        CreateSegment(new Vector3(0, 0, segmentZLength), segments[0]);
+        // Z 轴方向总长 = 长度分段数 × 间距（scale * PI）
+        segmentZLength = dimensions.y * scale * Mathf.PI;
+
+        // 生成初始两个片段
+        CreateSegment(Vector3.zero, false);
+        CreateSegment(new Vector3(0, 0, segmentZLength), true);
     }
 
-void Update()
+    void Update()
     {
         if (player == null) return;
 
         float moveAmount = -globalSpeed * Time.deltaTime;
 
+        // 所有片段向 -Z 移动
         for (int i = segments.Count - 1; i >= 0; i--)
         {
             if (segments[i].gameObject != null)
                 segments[i].gameObject.transform.position += Vector3.forward * moveAmount;
         }
 
+        // 前方生成新片段
         if (segments.Count > 0)
         {
             SegmentData lastSeg = segments[segments.Count - 1];
@@ -82,11 +115,12 @@ void Update()
                 if (lastSegEndZ - playerZ < segmentZLength * 1.5f)
                 {
                     Vector3 spawnPos = new Vector3(0, 0, lastSeg.gameObject.transform.position.z + segmentZLength);
-                    CreateSegment(spawnPos, lastSeg);
+                    CreateSegment(spawnPos, true);
                 }
             }
         }
 
+        // 移除后方旧片段
         if (segments.Count > 1)
         {
             SegmentData firstSeg = segments[0];
@@ -105,37 +139,13 @@ void Update()
     }
 
     /// <summary>
-    /// 获取指定片段末尾一环顶点的世界空间坐标
+    /// 创建圆柱体网格片段（完全对齐 WorldGenerators 的 col-major 顶点布局）
     /// </summary>
-    Vector3[] GetEndRingWorldPositions(SegmentData seg)
+    void CreateSegment(Vector3 worldPosition, bool useTransition)
     {
-        int radialCount = dimensions.x;
-        int lengthCount = dimensions.y;
-        int vertexCols = radialCount + 1;
-        int lastRowStart = lengthCount * vertexCols;
-
-        Vector3[] endRing = new Vector3[vertexCols];
-        Vector3[] vertices = seg.meshFilter.mesh.vertices;
-        Transform t = seg.gameObject.transform;
-
-        for (int col = 0; col < vertexCols; col++)
-        {
-            endRing[col] = t.TransformPoint(vertices[lastRowStart + col]);
-        }
-
-        return endRing;
-    }
-
-    /// <summary>
-    /// 创建一个世界片段
-    /// </summary>
-    /// <param name="worldPosition">片段的世界空间位置</param>
-    /// <param name="previousSegment">前一个片段引用（用于平滑过渡），可为null</param>
-void CreateSegment(Vector3 worldPosition, SegmentData previousSegment)
-    {
-        int radialCount = dimensions.x;
-        int lengthCount = dimensions.y;
-        int vertexCols = radialCount + 1;
+        int xCount = dimensions.x;      // 径向分段数
+        int zCount = dimensions.y;      // 轴向分段数
+        int vertexCols = xCount + 1;    // 径向顶点数（+1 用于首尾焊接到 2π）
 
         GameObject segObj = new GameObject("Segment_" + segmentIndex);
         segObj.transform.position = worldPosition;
@@ -143,81 +153,89 @@ void CreateSegment(Vector3 worldPosition, SegmentData previousSegment)
 
         MeshFilter mf = segObj.AddComponent<MeshFilter>();
         MeshRenderer mr = segObj.AddComponent<MeshRenderer>();
-        mr.material = segmentMaterial != null ? segmentMaterial : new Material(Shader.Find("Standard"));
+        mr.material = segmentMaterial != null ? segmentMaterial : new Material(Shader.Find("Universal Render Pipeline/Lit"));
 
         Mesh mesh = new Mesh();
+        mesh.name = "MESH_Segment_" + segmentIndex;
         mf.mesh = mesh;
 
-        Vector3[] beginPoints = null;
-        if (previousSegment != null)
+        // 每个新片段增大噪声偏移
+        offset += randomness;
+
+        int vertexCount = (xCount + 1) * (zCount + 1);
+        Vector3[] vertices = new Vector3[vertexCount];
+        Vector2[] uvs = new Vector2[vertexCount];
+        int index = 0;
+
+        // 获取圆柱半径
+        float radius = xCount * scale * 0.5f;
+
+        // ★ 关键：外层 x（径向），内层 z（轴向）—— 与 WorldGenerators 完全一致的 col-major 布局
+        for (int x = 0; x <= xCount; x++)
         {
-            beginPoints = GetEndRingWorldPositions(previousSegment);
-        }
+            float angle = x * Mathf.PI * 2f / xCount;
 
-        int vertexRows = lengthCount + 1;
-        int vertCount = vertexRows * vertexCols;
-
-        Vector3[] vertices = new Vector3[vertCount];
-        Vector2[] uvs = new Vector2[vertCount];
-
-        for (int row = 0; row < vertexRows; row++)
-        {
-            float t = (float)row / lengthCount;
-            float localZ = t * segmentZLength;
-            float worldZ = worldPosition.z + localZ;
-
-            // 过渡渐变因子：开始几行平滑过渡，减少突变
-            float transitionFactor = (beginPoints != null && row < 3) ? Mathf.SmoothStep(0f, 1f, (float)row / 3f) : 1f;
-
-            for (int col = 0; col < vertexCols; col++)
+            for (int z = 0; z <= zCount; z++)
             {
-                int idx = row * vertexCols + col;
-                float angle = (float)col / radialCount * Mathf.PI * 2f;
+                // 圆柱表面顶点
+                vertices[index] = new Vector3(
+                    Mathf.Cos(angle) * radius,
+                    Mathf.Sin(angle) * radius,
+                    z * scale * Mathf.PI
+                );
 
-                if (row == 0 && beginPoints != null)
+                // === Perlin 噪声向圆柱中心内推 ===
+                float pX = vertices[index].x * perlinScale + offset;
+                float pZ = vertices[index].z * perlinScale + offset;
+                float noise = Mathf.PerlinNoise(pX, pZ);
+
+                Vector3 center = new Vector3(0, 0, vertices[index].z);
+                vertices[index] += (center - vertices[index]).normalized * noise * waveHeight;
+
+                // === 片段间平滑过渡 ===
+                if (useTransition && z < startTransitionLength && beginPoints[0] != Vector3.zero)
                 {
-                    vertices[idx] = segObj.transform.InverseTransformPoint(beginPoints[col]);
+                    float perlinPercentage = z * (1f / startTransitionLength);
+                    Vector3 beginPoint = new Vector3(beginPoints[x].x, beginPoints[x].y, vertices[index].z);
+                    vertices[index] = perlinPercentage * vertices[index] + (1f - perlinPercentage) * beginPoint;
                 }
-                else
+                else if (z == zCount)
                 {
-                    float nx = Mathf.Cos(angle) * perlinScale + offset + worldZ * 0.3f;
-                    float ny = Mathf.Sin(angle) * perlinScale + offset + worldZ * 0.3f;
-                    float noise = Mathf.PerlinNoise(nx, ny);
-
-                    float rand = (Mathf.PerlinNoise(angle * 10f + offset + 100f, worldZ * 0.5f + offset + 200f) - 0.5f) * 2f * randomness;
-
-                    float radiusOffset = (noise * waveHeight + rand) * transitionFactor;
-                    float radius = scale - radiusOffset;
-                    radius = Mathf.Max(radius, 0.1f);
-
-                    float x = Mathf.Cos(angle) * radius;
-                    float y = Mathf.Sin(angle) * radius;
-                    vertices[idx] = new Vector3(x, y, localZ);
+                    // 末尾行：存入 beginPoints 供下一片段过渡
+                    beginPoints[x] = vertices[index];
                 }
 
-                uvs[idx] = new Vector2((float)col / radialCount, t);
+                // UV 坐标
+                uvs[index] = new Vector2(x * scale, z * scale);
+
+                index++;
             }
         }
 
-        int[] triangles = new int[radialCount * lengthCount * 6];
-        int triIdx = 0;
+        // === 三角形索引（boxBase 滑动窗口） ===
+        int[] triangles = new int[xCount * zCount * 6];
+        int current = 0;
 
-        for (int row = 0; row < lengthCount; row++)
+        for (int x = 0; x < xCount; x++)
         {
-            for (int col = 0; col < radialCount; col++)
+            int[] boxBase = new int[]
             {
-                int bl = row * vertexCols + col;
-                int br = bl + 1;
-                int tl = (row + 1) * vertexCols + col;
-                int tr = tl + 1;
+                x * (zCount + 1),
+                x * (zCount + 1) + 1,
+                (x + 1) * (zCount + 1),
+                x * (zCount + 1) + 1,
+                (x + 1) * (zCount + 1) + 1,
+                (x + 1) * (zCount + 1),
+            };
 
-                triangles[triIdx++] = bl;
-                triangles[triIdx++] = tl;
-                triangles[triIdx++] = br;
-
-                triangles[triIdx++] = br;
-                triangles[triIdx++] = tl;
-                triangles[triIdx++] = tr;
+            for (int z = 0; z < zCount; z++)
+            {
+                for (int i = 0; i < 6; i++)
+                {
+                    boxBase[i] += 1;
+                    triangles[current + i] = boxBase[i] - 1;
+                }
+                current += 6;
             }
         }
 
