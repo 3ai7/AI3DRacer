@@ -14,12 +14,12 @@ OcclusionCullingSettings:
 RenderSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 9
-  m_Fog: 0
-  m_FogColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-  m_FogMode: 3
+  m_Fog: 1
+  m_FogColor: {r: 0.8352941, g: 0.9647059, b: 1, a: 1}
+  m_FogMode: 1
   m_FogDensity: 0.01
-  m_LinearFogStart: 0
-  m_LinearFogEnd: 300
+  m_LinearFogStart: 50
+  m_LinearFogEnd: 200
   m_AmbientSkyColor: {r: 0.212, g: 0.227, b: 0.259, a: 1}
   m_AmbientEquatorColor: {r: 0.114, g: 0.125, b: 0.133, a: 1}
   m_AmbientGroundColor: {r: 0.047, g: 0.043, b: 0.035, a: 1}
@@ -96,8 +96,8 @@ LightmapSettings:
     m_ExportTrainingData: 0
     m_TrainingDataDestination: TrainingData
     m_LightProbeSampleCountMultiplier: 4
-  m_LightingDataAsset: {fileID: 0}
-  m_LightingSettings: {fileID: 0}
+  m_LightingDataAsset: {fileID: 112000000, guid: 6ee2aeb8172e2734d9d04023fe0c41ee, type: 2}
+  m_LightingSettings: {fileID: 4890085278179872738, guid: 751273083a3ad2548ab6ec61f7870ab0, type: 2}
 --- !u!196 &4
 NavMeshSettings:
   serializedVersion: 2
@@ -321,6 +321,7 @@ GameObject:
   m_Component:
   - component: {fileID: 526940380}
   - component: {fileID: 526940379}
+  - component: {fileID: 526940381}
   m_Layer: 0
   m_Name: Directional Light
   m_TagString: Untagged
@@ -339,8 +340,8 @@ Light:
   serializedVersion: 10
   m_Type: 1
   m_Shape: 0
-  m_Color: {r: 1, g: 0.95686275, b: 0.8392157, a: 1}
-  m_Intensity: 1
+  m_Color: {r: 0.9137255, g: 0.8784314, b: 0.627451, a: 1}
+  m_Intensity: 0.9
   m_Range: 10
   m_SpotAngle: 30
   m_InnerSpotAngle: 21.80208
@@ -349,7 +350,7 @@ Light:
     m_Type: 2
     m_Resolution: -1
     m_CustomResolution: -1
-    m_Strength: 1
+    m_Strength: 0.5
     m_Bias: 0.05
     m_NormalBias: 0.4
     m_NearPlane: 0.2
@@ -405,6 +406,21 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 50, y: -30, z: 0}
+--- !u!114 &526940381
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 526940378}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1eecdc103611f8243956e908a508a120, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  movespeed: 0
+  rotateSpeed: 30
+  lamp: 1
 --- !u!1 &626604791
 GameObject:
   m_ObjectHideFlags: 0
@@ -1173,16 +1189,23 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 15898bd8f7e225f4f9184530215c129b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  meshMaterial: {fileID: 2100000, guid: 474a1663c74f9fe4ba20acb2e5cd534c, type: 2}
   scale: 1
-  dimensions: {x: 32, y: 50}
-  perlinScale: 0.3
-  waveHeight: 1
-  offset: 0
-  randomness: 0.1
-  globalSpeed: 20
-  startTransitionLength: 2
-  player: {fileID: 1858592064}
-  segmentMaterial: {fileID: 2100000, guid: 474a1663c74f9fe4ba20acb2e5cd534c, type: 2}
+  dimensions: {x: 32, y: 70}
+  perlinScale: 0.06
+  waveHeight: 5.5
+  offset: 1000
+  randomness: 15
+  globalSpeed: 15
+  startTransitionLength: 5
+  lampMovement: {fileID: 526940381}
+  obstacles: []
+  gate: {fileID: 0}
+  startObstacleChance: 50
+  obstacleChanceAcceleration: 1
+  gateChance: 7
+  showItemDistance: 120
+  shadowHeight: -3
 --- !u!4 &1626500271
 Transform:
   m_ObjectHideFlags: 0
@@ -1419,19 +1442,21 @@ MonoBehaviour:
   - {fileID: 1719466549}
   - {fileID: 626604793}
   - {fileID: 914554866}
-  rotateSpeed: 0
-  rotationAngle: 45
-  wheelRotateSpeed: 10
+  rotateSpeed: 70
+  rotationAngle: 25
+  wheelRotateSpeed: 600
   grassEffects: []
   skidMarkPivots: []
   grassEffectOffset: 0.2
   back: {fileID: 654520329}
-  constantBackForce: 500
-  skidMark: {fileID: 0}
-  skidMarkSize: 0.5
-  skidMarkDelay: 0.1
-  minRotationDifference: 1
+  constantBackForce: 10
+  skidMark: {fileID: 2791426548820830558, guid: 5ffa0f7e11e27854d8113f7f5209b647, type: 3}
+  skidMarkSize: 0.12
+  skidMarkDelay: 0.005
+  minRotationDifference: 0.2
   ragdoll: {fileID: 0}
+  motorTorque: 800
+  brakeTorque: 2000
 --- !u!1 &2121773617
 GameObject:
   m_ObjectHideFlags: 0
