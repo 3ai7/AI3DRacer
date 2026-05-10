@@ -18,6 +18,8 @@ public class WorldGenerator : MonoBehaviour {
 	public BasicMovement lampMovement;
 	public GameObject[] obstacles;
 	public GameObject gate;
+	public GameObject scoreCubePrefab;
+	public int scoreCubeChance = 10;
 	public int startObstacleChance = 20;
 	public int obstacleChanceAcceleration = 1;
 	public int gateChance = 50;
@@ -234,6 +236,10 @@ public class WorldGenerator : MonoBehaviour {
                     beginPoints[x] = vertices[index];
 				}
 
+                // 得分方块独立生成（无预制体时自动创建原始 Cube）
+                if (Random.Range(0, scoreCubeChance) == 0)
+                    CreateScoreCube(vertices[index]);
+
                 //利用网格顶点在随机位置生成物品
                 if (Random.Range(0, startObstacleChance) == 0 && !(gate == null && obstacles.Length == 0))
 					CreateItem(vertices[index], x);
@@ -283,6 +289,63 @@ public class WorldGenerator : MonoBehaviour {
 		}
 	}
 	
+	void CreateScoreCube(Vector3 vert){
+        Vector3 zCenter = new Vector3(0, 0, vert.z);
+        
+        // 检查角度有效性
+        if (zCenter - vert == Vector3.zero)
+            return;
+
+        // 方块向内放置（通道内侧），车经过表面时距离检测触发
+        Vector3 normal = (zCenter - vert).normalized;
+        Vector3 scorePos = vert + normal * 0.8f;
+
+        GameObject scoreCube;
+        if (scoreCubePrefab != null)
+        {
+            scoreCube = Instantiate(scoreCubePrefab, scorePos, Quaternion.identity);
+        }
+        else
+        {
+            // 兜底：无预制体时自动创建原始 Cube
+            scoreCube = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            scoreCube.transform.position = scorePos;
+            Debug.LogWarning("[ScoreCube] No prefab assigned. Created primitive Cube instead.");
+        }
+        scoreCube.name = "ScoreCube";
+        scoreCube.transform.SetParent(currentCylinder.transform, true);
+
+        // 确保有 ScoreCube 组件
+        if (scoreCube.GetComponent<ScoreCube>() == null)
+            scoreCube.AddComponent<ScoreCube>();
+
+        // ⚠️ 移除/禁用碰撞体：WheelCollider 悬挂射线会打中它造成物理颠簸
+        Collider[] cols = scoreCube.GetComponentsInChildren<Collider>();
+        foreach (var c in cols) Destroy(c);
+
+        Rigidbody rb = scoreCube.GetComponent<Rigidbody>();
+        if (rb != null) Destroy(rb);
+
+        // 让方块朝向通道中心
+        scoreCube.transform.rotation = Quaternion.LookRotation(-normal, Vector3.up);
+        
+        // 扩大缩放范围
+        float randomScale = Random.Range(0.8f, 1.5f);
+        scoreCube.transform.localScale = Vector3.one * randomScale;
+
+        // 随机颜色
+        MeshRenderer[] scoreRenderers = scoreCube.GetComponentsInChildren<MeshRenderer>();
+        MaterialPropertyBlock scorePropBlock = new MaterialPropertyBlock();
+        foreach (var r in scoreRenderers)
+        {
+            r.GetPropertyBlock(scorePropBlock);
+            scorePropBlock.SetColor("_Color", Random.ColorHSV(0.1f, 0.4f, 0.7f, 1f, 0.8f, 1f)); // 金黄色调
+            r.SetPropertyBlock(scorePropBlock);
+        }
+
+        Debug.Log($"[ScoreCube] Spawned at {scorePos}");
+    }
+
 	void CreateItem(Vector3 vert, int x){
         //获取圆柱体的中心，但使用顶点的 z 值
         Vector3 zCenter = new Vector3(0, 0, vert.z);

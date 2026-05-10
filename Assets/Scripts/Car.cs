@@ -45,6 +45,10 @@ public class Car : MonoBehaviour
         generator = GameObject.FindObjectOfType<WorldGenerator>();
         StartCoroutine(SkidMark());
 
+        // 定期检测附近 ScoreCube（无碰撞体方案，避免 WheelCollider 悬挂射线物理碰撞）
+        InvokeRepeating(nameof(CheckNearbyScoreCubes), 0.5f, 0.5f);
+        Debug.Log("[Car] InvokeRepeating started for CheckNearbyScoreCubes");
+
         // 设置车轮摩擦力
         foreach (var wc in wheelColliders)
         {
@@ -251,6 +255,32 @@ public class Car : MonoBehaviour
         if (collision.gameObject.CompareTag("Obstacle"))
         {
             FallApart();
+        }
+    }
+
+    void CheckNearbyScoreCubes()
+    {
+        ScoreCube[] cubes = FindObjectsOfType<ScoreCube>();
+        if (cubes.Length > 0)
+            Debug.Log($"[Car] CheckNearbyScoreCubes: found {cubes.Length} ScoreCube(s) in scene");
+        
+        foreach (var cube in cubes)
+        {
+            if (cube == null) continue;
+            float dist = Vector3.Distance(transform.position, cube.transform.position);
+            if (dist < 3f)
+            {
+                if (GameManager.Instance != null)
+                {
+                    GameManager.Instance.AddScore(1);
+                    Debug.Log($"[Car] Collected ScoreCube! Score +1 (dist={dist:F2})");
+                }
+                else
+                {
+                    Debug.LogWarning("[Car] GameManager.Instance is null! Cannot add score.");
+                }
+                Destroy(cube.gameObject);
+            }
         }
     }
 }
