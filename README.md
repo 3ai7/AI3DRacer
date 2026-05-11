@@ -55,7 +55,7 @@ Assets/
 └── Scenes/
     └── Game.unity         # 主游戏场景
 ```
-## 📸 截图
+## 📸 项目展示
 ![截图描述](demo1.png)
 ![游戏玩法演示](demo.gif)
 
