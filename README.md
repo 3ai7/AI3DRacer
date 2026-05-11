@@ -1,152 +1,108 @@
-以下是一份专为你的“AI 辅助生成的 3D 无尽圆柱赛道赛车”项目定制的 `README.md`，你可以直接复制到仓库根目录，并替换掉括号内的占位内容。
+🚗 Cylindrical Runner – 无尽圆柱赛道
+项目描述： Unity + DeepSeek API + unityMCP 全 AI 辅助生成的无尽驾驶游戏。  
+> 实现从代码生成到玩法调试的完整自动化流程。
 
----
+🎮 游戏简介
+在一条无限延伸的圆柱形隧道中驾驶赛车，通过键盘方向键控制车辆左右转向，收集得分方块。
+核心玩法：向左/向右切换车道，尽量久地存活并获取高分
+ **操作方式**：
+  - `W / ↑` 前进
+  - `S / ↓` 后退
+  - 鼠标在屏幕左/右半侧 或 `A/D` `←/→` 控制转向
+- **得分方式**：
+  - 靠近金色立方体（`ScoreCube`）自动拾取 +1 分
+  - 穿越旋转变色的 Gate +1 分
 
-```markdown
-# 🏎️ Endless Cylinder Racer – AI 从零生成的 3D 无尽赛车
+## 🧱 技术特色
 
-> 一款使用 **Unity + C#** 开发的 3D 无尽赛车游戏。  
-> 所有代码与场景由 **AI（Claude + Unity MCP）通过自然语言指令从零生成**，未使用任何预制脚本。
+| 模块 | 说明 |
+|------|------|
+| **程序化世界** | `WorldGenerator` 使用柏林噪声生成圆柱形赛道，地形随机起伏，世界片段无限循环 |
+| **物理驱动车辆** | `Car` 基于 `WheelCollider` 后轮驱动，带刹车、转向回正、漂移胎痕与草地扬尘特效 |
+| **动态摄像机** | `CameraFollow` 平滑跟随，缓动延迟可配置，启动时提供剧院式过渡 |
+| **随机物品生成** | 障碍物、Gate、ScoreCube 在世界生成时根据概率自动生成，颜色/大小/旋转均有随机性 |
+| **分数系统** | `GameManager` 单例管理分数与游戏结束状态，`ScoreUI` 实时刷新 UI |
+| **性能优化** | 视野裁剪：远距离物品关闭渲染与阴影，减少 DrawCall |
 
-![Gameplay Screenshot](screenshot.png) <!-- 可替换为你的游戏截图 -->
+## 🤖 AI 辅助开发
 
----
+本项目的 **全部 C# 脚本均由 DeepSeek API 驱动生成**。工作流如下：
 
-## 🎮 游戏简介
+```
+VS Code + Unity MCP ↔️ DeepSeek API
+         ↓
+  AI 理解需求 → 生成代码 → 实时导入 Unity 运行
+         ↓
+  人工反馈/调整 → AI 迭代修正 → 最终成型
+```
 
-玩家操控一辆赛车，在一个**动态生成的圆柱赛道内表面**无尽飞驰。赛道地形由**柏林噪声**实时生成，每次运行都独一无二。躲避障碍物、穿过得分门，坚持越久分数越高！
-
-### ✨ 核心特性
-
-- **无尽圆柱赛道**：圆柱形赛道无限延伸，顶点基于柏林噪声产生起伏，视觉永不重复。
-- **动态生成**：一次只保留两段赛道，旧的自动销毁，新的即时生成，实现真正无限循环。
-- **完整车辆物理**：自定义 WheelCollider 控制、车轮动画、稳定性辅助、尘土粒子特效。
-- **智能摄像机**：第三人称跟随，平滑入场，转弯时拥有电影级阻尼感。
-- **障碍物与闸门**：随机生成的动态障碍（碰撞即结束）与得分门（穿过 +1 分）。
-- **游戏管理器**：计时、计分、本地最高分记录、游戏结束重玩。
-- **主菜单与背景音乐**：简洁的启动界面，跨场景不中断的背景音乐。
-
----
-
-## 🧠 AI 开发说明
-
-本项目是 **“AI 驱动游戏开发”** 的实验作品，全程使用 **VSCode + Unity MCP（Model Context Protocol）** 让 AI 直接读取场景、创建脚本、配置组件。开发者只需给出自然语言指令，AI 即可完成编写代码、搭建场景、关联引用等所有工作。
-
-> 示例指令：  
-> “创建一个 WorldGenerator 脚本，使用柏林噪声生成圆柱赛道，支持无限循环。”  
-> “在场景中创建 Canvas，添加分数文本和时间文本，并挂载 GameManager。”
-
-整个项目约 **95% 的代码由 AI 生成**，包括：
-- `WorldGenerator.cs`
-- `Car.cs`
-- `CameraFollow.cs`
-- `GameManager.cs`
-- `Obstacle.cs` / `Gate.cs`
-- `MainMenu.cs` / `Music.cs`
-
-你可以在 [Commit 历史] 中看到每一步的 AI 对话记录（如果有的话）。
-
-> 工具链： `Unity 2021.3` · `VSCode` · `Unity MCP` · `Claude 3 / Copilot`
-
----
-
-## 🚀 快速开始
-
-### 环境要求
-- Unity 2021.3 或更高版本（内置渲染管线）
-- .NET Framework 4.x（默认）
-- 任意支持 WebGL / PC 的平台
-
-### 运行游戏
-1. 克隆仓库：
-   ```bash
-   git clone https://github.com/你的用户名/EndlessCylinderRacer.git
-   ```
-2. 使用 Unity Hub 打开项目文件夹。
-3. 打开 `Scenes/MainMenu` 场景，点击 Play 或直接进入 `Scenes/Game` 场景。
-4. 使用**鼠标点击屏幕左右半区** 或 **A/D 键（←→）** 控制赛车左右变道。
-
----
-
-## 🎛️ 核心参数调整
-
-所有主要参数均在 Unity Inspector 中公开，方便调整游戏体验：
-
-| 脚本 | 关键参数 | 作用 |
-|------|---------|------|
-| `WorldGenerator` | `dimensions.y` / `scale` | 控制单段赛道长度 |
-| `WorldGenerator` | `waveHeight` | 地形起伏高度 |
-| `WorldGenerator` | `globalSpeed` | 赛道卷动速度（难度） |
-| `Car` | `rotateSpeed` / `rotationAngle` | 车辆转向灵敏度 |
-| `CameraFollow` | `distance` / `height` | 摄像机视角 |
-
----
+- 使用 `Unity MCP` 作为中间件，让 AI 能直接读写 Unity 场景与脚本
+- 通过自然语言描述功能需求（如“添加漂移效果”、“生成随机尺寸的障碍物”），AI 即时产出可用代码
+- 所有脚本均保留清晰注释，便于 HR 快速理解 AI 的代码生成质量
 
 ## 📂 项目结构
 
 ```
 Assets/
 ├── Scripts/
-│   ├── WorldGenerator.cs      # 圆柱赛道动态生成
-│   ├── BasicMovement.cs       # 赛道片段移动
-│   ├── Car.cs                 # 玩家车辆控制
-│   ├── CameraFollow.cs        # 第三人称相机
-│   ├── GameManager.cs         # 游戏主逻辑与UI
-│   ├── Obstacle.cs            # 障碍物
-│   ├── Gate.cs                # 得分门
-│   ├── CarGameOverTrigger.cs  # 翻车检测
-│   ├── MainMenu.cs            # 主菜单
-│   └── Music.cs               # 背景音乐单例
-├── Scenes/
-│   ├── MainMenu.unity
-│   └── Game.unity
-├── Prefabs/
-│   ├── PlayerCar.prefab
-│   ├── Obstacle.prefab
-│   └── Gate.prefab
-└── Materials/
+│   ├── Car.cs                  # 车辆控制、物理、特效、得分检测
+│   ├── BasicMovement.cs        # 物体向玩家移动并跟随车辆旋转
+│   ├── CameraFollow.cs         # 第三人称相机跟随
+│   ├── WorldGenerator.cs       # 程序化世界生成 (赛道、障碍物、Gate、ScoreCube)
+│   ├── GameManager.cs          # 分数管理 & 游戏结束逻辑
+│   ├── Gate.cs                 # 通过门加分 (触发器)
+│   ├── Obstacle.cs             # 障碍物碰撞即游戏结束
+│   ├── ScoreCube.cs            # 无碰撞体，由 Car 距离检测拾取
+│   └── ScoreUI.cs              # UI 分数显示
+├── Prefabs/                    # 车辆、障碍物、Gate、ScoreCube 等预制体
+├── Materials/                  # 赛道材质等
+└── Scenes/
+    └── MainScene.unity         # 主游戏场景
 ```
 
----
+## 🚀 如何运行
 
-## 🛠️ 自定义与扩展
+1. **环境要求**  
+   - Unity 2020.3 或更高版本（推荐 2021 LTS+）
+   - .NET 4.x 脚本后端
+2. **克隆仓库**
+   ```bash
+   git clone https://github.com/你的用户名/项目名.git
+   ```
+3. **打开项目**  
+   使用 Unity Hub 打开项目文件夹，等待资源导入完成。
+4. **运行**  
+   双击 `MainScene`，点击 Play 按钮即可开始游戏。
 
-- **增加障碍物种类**：在 `WorldGenerator` 的 `obstacles` 数组里拖入新 Prefab，即可随机生成。
-- **添加得分特效**：修改 `GameManager.UpdateScore()`，使用 `scoreEffect` 触发器播放动画。
-- **实现 AI 对手**：该项目原生支持添加 ML‑Agents 训练的智能赛车（详见 `AIAgent` 分支，如果有的话）。
-- **更换赛道纹理**：替换 `WorldGenerator` 中的 `meshMaterial`。
+## 🎯 未来计划（可选）
 
----
+- 多赛道皮肤与车辆皮肤切换
+- 手机端陀螺仪操控支持
+- 在线排行榜
+- 更多随机事件（加速板、护盾等）
 
 ## 📸 截图
 
-（此处可粘贴游戏截图、GIF 动图或视频链接）
+> *此处可嵌入游戏运行截图或 GIF，直观展示赛道与效果*
+
+## 🧑‍💻 关于我
+
+- 独立开发者 / 技术爱好者，擅长利用前沿 AI 工具提升游戏开发效率
+- 该项目证明了即使没有深入编程经验，也能通过 AI 协作快速产出可玩的游戏原型
 
 ---
 
-## 🤝 贡献
-
-本项目旨在展示 **AI 辅助游戏开发** 的可能性。欢迎提交 Issue 或 PR 来完善 AI 生成代码的健壮性、添加新特性。
-
----
-
-## 📄 许可证
-
-本项目采用 MIT 许可证。详见 `LICENSE` 文件。
-
----
-
-## ⭐ 给个 Star 吧
-
-如果这个“AI 从零生成的游戏”让你感兴趣，不妨给个 Star ⭐ 支持一下，让更多人看到 AI 在游戏开发中的潜力！
+**如果你对 AI + 游戏开发感兴趣，欢迎 Star ⭐ 或联系我交流合作！**
 ```
 
 ---
 
-**使用建议**：
-1. 将 `screenshot.png` 替换为你的游戏实际截图（放在仓库根目录）。
-2. 将 `https://github.com/你的用户名/EndlessCylinderRacer.git` 改为你的仓库链接。
-3. 如果你在开发过程中真的保留了 AI 对话记录，可以在 AI 开发说明部分附上链接或截图，非常加分。
-4. 如果后续添加了 ML‑Agents 的 AI 对手，可以额外开一个分支并在 README 中提及。
+### 💡 写给 HR 的加分注意事项
 
-这份 README 既清晰说明了游戏玩法，又突出了“纯 AI 生成”的技术亮点，非常适合放在 GitHub 上展示。
+1. **在仓库顶放一张动图**（游戏运行录屏），远比文字有力。可录一段 15 秒的漂移 + 吃分块的画面。
+2. **将 `Unity MCP` 和 `DeepSeek API` 加粗强调**，让 HR 知道你对 AI 工具有实际应用经验。
+3. **在“AI 辅助开发”部分**可以简化为一段话：  
+   > “本项目全部 C# 代码均在 VS Code 中通过描述需求，由 DeepSeek 生成。Unity MCP 负责将代码即时注入引擎，实现了「说需求→看效果」的极速迭代。”
+4. 如果申请的是 **技术岗**，可补充一节“技术选型与设计模式”说明单例、对象池（如有）、协程等应用。如果侧重 **策划/综合岗**，可侧重玩法设计与随机生成思路。
+
+以上 README 模板直接使用即可，记得替换仓库链接、添加截图，并根据你的实际开发体验微调用词。祝你获得 HR 的青睐！
