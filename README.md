@@ -1,5 +1,5 @@
 🚗 Cylindrical Runner – 无尽圆柱赛道
-项目描述： Unity + DeepSeek API + unityMCP 全 AI 辅助生成的无尽驾驶游戏。  
+- 项目描述： Unity + DeepSeek API + unityMCP 全 AI 辅助生成的无尽驾驶游戏。  
 > 实现从代码生成到玩法调试的完整自动化流程。
 
 🎮 游戏简介
